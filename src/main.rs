@@ -8,12 +8,24 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
 use directories_next::ProjectDirs;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "buzz",
+    about = "A simple system tray application for notifying about unseen e-mail"
+)]
+struct Options {
+    #[structopt(short, long, parse(from_os_str))]
+    config: Option<PathBuf>,
+}
 
 #[derive(Clone)]
 struct Account {
@@ -150,7 +162,13 @@ impl<T: Read + Write + imap::extensions::idle::SetReadTimeout> Connection<T> {
 
             if !subjects.is_empty() {
                 if let Some(notificationcmd) = &self.account.notification_command {
-                    match Command::new("sh").stdout(Stdio::null()).stderr(Stdio::null()).arg("-c").arg(notificationcmd).status() {
+                    match Command::new("sh")
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .arg("-c")
+                        .arg(notificationcmd)
+                        .status()
+                    {
                         Ok(s) if s.success() => {}
                         Ok(s) => {
                             eprint!(
@@ -231,28 +249,32 @@ fn parse_failed<T>(key: &str, typename: &str) -> Option<T> {
 
 fn main() {
     // Load the user's config
-    let config = ProjectDirs::from("", "", "buzz")
-        .expect("Could not find valid home directory.")
-        .config_dir()
-        .with_file_name("buzz.toml");
+    let opts = Options::from_args();
+
+    let config = opts.config.unwrap_or_else(||
+        ProjectDirs::from("", "", "buzz")
+            .expect("Could not find valid home directory.")
+            .config_dir()
+            .with_file_name("buzz.toml"),
+    );
 
     let config = {
-        let mut f = match File::open(config) {
+        let mut f = match File::open(&config) {
             Ok(f) => f,
             Err(e) => {
-                println!("Could not open configuration file buzz.toml: {}", e);
+                println!("Could not open configuration file '{}': {}", &config.display(), e);
                 return;
             }
         };
         let mut s = String::new();
         if let Err(e) = f.read_to_string(&mut s) {
-            println!("Could not read configuration file buzz.toml: {}", e);
+            println!("Could not read configuration file '{}': {}", &config.display(), e);
             return;
         }
         match s.parse::<toml::Value>() {
             Ok(t) => t,
             Err(e) => {
-                println!("Could not parse configuration file buzz.toml: {}", e);
+                println!("Could not parse configuration file '{}': {}", &config.display(), e);
                 return;
             }
         }
