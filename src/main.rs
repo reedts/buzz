@@ -19,6 +19,9 @@ use directories_next::ProjectDirs;
 #[cfg(feature = "systray")]
 mod tray_icon;
 
+const NO_MAIL_ICON: &str = "󰇯 ";
+const NEW_MAIL_ICON: &str = "󰇮 ";
+
 #[derive(Clone)]
 struct Account {
     name: String,
@@ -408,11 +411,17 @@ fn main() {
         };
         new[i] = num_new;
 
-        #[cfg(feature = "systray")]
-        if new.iter().sum::<usize>() == 0 {
+        let num_new_mails = new.iter().sum::<usize>();
+        if num_new_mails == 0 {
+            #[cfg(feature = "systray")]
             tray_icon.set_icon(tray_icon::Icon::UnreadMail);
+
+            println!("{}", NO_MAIL_ICON);
         } else {
+            #[cfg(feature = "systray")]
             tray_icon.set_icon(tray_icon::Icon::NewMail);
+
+            println!("{} {}", NEW_MAIL_ICON, num_new_mails);
         }
     }
 }
